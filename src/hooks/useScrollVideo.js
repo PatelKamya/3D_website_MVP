@@ -5,8 +5,8 @@ const clamp = (value) => Math.min(Math.max(value, 0), 1)
 export function useScrollVideo(containerRef, videoRef, reducedMotion = false) {
   const progressRef = useRef(0)
   const targetTimeRef = useRef(0)
-  const frameRef = useRef()
-  const seekFrameRef = useRef()
+  const scrollFrameRef = useRef()
+  const playbackFrameRef = useRef()
 
   useEffect(() => {
     const container = containerRef.current
@@ -14,14 +14,23 @@ export function useScrollVideo(containerRef, videoRef, reducedMotion = false) {
     if (!container || !video) return
 
     let duration = 0
+    let displayedTime = 0
+    let lastFrameTime = performance.now()
+    let lastSeekTime = 0
+    let isActive = true
+
     const readDuration = () => {
       duration = Number.isFinite(video.duration) ? video.duration : 0
       video.pause()
-      if (duration && !reducedMotion) targetTimeRef.current = progressRef.current * Math.max(duration - 0.04, 0)
+      if (duration && !reducedMotion) {
+        targetTimeRef.current = progressRef.current * Math.max(duration - 0.04, 0)
+        displayedTime = targetTimeRef.current
+        video.currentTime = displayedTime
+      }
     }
 
     const updateProgress = () => {
-      frameRef.current = undefined
+      scrollFrameRef.current = undefined
       const rect = container.getBoundingClientRect()
       const distance = Math.max(container.offsetHeight - window.innerHeight, 1)
       const progress = clamp(-rect.top / distance)
@@ -31,15 +40,25 @@ export function useScrollVideo(containerRef, videoRef, reducedMotion = false) {
     }
 
     const onScroll = () => {
-      if (!frameRef.current) frameRef.current = requestAnimationFrame(updateProgress)
+      if (!scrollFrameRef.current) scrollFrameRef.current = requestAnimationFrame(updateProgress)
     }
 
-    const smoothSeek = () => {
-      if (duration && !reducedMotion && video.readyState >= 2) {
-        const difference = targetTimeRef.current - video.currentTime
-        if (Math.abs(difference) > 0.008) video.currentTime += difference * 0.11
+    const smoothSeek = (now) => {
+      const elapsed = Math.min(now - lastFrameTime, 64)
+      lastFrameTime = now
+
+      if (isActive && duration && !reducedMotion && video.readyState >= 2) {
+        const difference = targetTimeRef.current - displayedTime
+        const smoothing = 1 - Math.exp(-elapsed / 42)
+        displayedTime += difference * smoothing
+
+        // Avoid flooding the decoder with more seek requests than it can render.
+        if (now - lastSeekTime >= 30 && Math.abs(video.currentTime - displayedTime) > 0.012) {
+          video.currentTime = displayedTime
+          lastSeekTime = now
+        }
       }
-      seekFrameRef.current = requestAnimationFrame(smoothSeek)
+      playbackFrameRef.current = requestAnimationFrame(smoothSeek)
     }
 
     readDuration()
@@ -47,14 +66,15 @@ export function useScrollVideo(containerRef, videoRef, reducedMotion = false) {
     video.addEventListener('loadedmetadata', readDuration)
     window.addEventListener('scroll', onScroll, { passive: true })
     window.addEventListener('resize', onScroll, { passive: true })
-    seekFrameRef.current = requestAnimationFrame(smoothSeek)
+    playbackFrameRef.current = requestAnimationFrame(smoothSeek)
 
     return () => {
+      isActive = false
       video.removeEventListener('loadedmetadata', readDuration)
       window.removeEventListener('scroll', onScroll)
       window.removeEventListener('resize', onScroll)
-      cancelAnimationFrame(frameRef.current)
-      cancelAnimationFrame(seekFrameRef.current)
+      cancelAnimationFrame(scrollFrameRef.current)
+      cancelAnimationFrame(playbackFrameRef.current)
     }
   }, [containerRef, videoRef, reducedMotion])
 

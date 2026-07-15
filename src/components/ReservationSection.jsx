@@ -8,7 +8,7 @@ export default function ReservationSection() {
         <div className="reservation-copy">
           <p className="eyebrow"><span /> Your table awaits</p>
           <h2>Make time for<br /><em>something lovely.</em></h2>
-          <p>Breakfast with an old friend, an afternoon alone, or a table full of people you love. We will keep your corner warm.</p>
+          <p className="text-black">Breakfast with an old friend, an afternoon alone, or a table full of people you love. We will keep your corner warm.</p>
           <div className="reservation-meta"><span><small>For groups of 8+</small><a href="tel:+919876543210">+91 98765 43210</a></span><span><small>Questions?</small><a href="mailto:hello@roastandreverie.com">Send us a note</a></span></div>
         </div>
         <form className="reservation-form" onSubmit={submit}>
